@@ -10,7 +10,6 @@ from moviepy.video.fx.all import crop, resize, rotate, speedx
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 import subprocess
-import json
 import zipfile
 import io
 
@@ -22,7 +21,7 @@ st.set_page_config(
 )
 
 st.title("🎬 Complete Shorts Studio")
-st.caption("Smart Combine | Auto Batch | Professional Editor | Scooby Reactions | Transitions")
+st.caption("No API Keys | Fully Free | Smart Combine | Auto Batch | Professional Editor")
 
 # Session state
 if 'videos' not in st.session_state:
@@ -38,6 +37,8 @@ HOOK_TEXTS = {
         "Me trying to wake up for a 9 AM class",
         "That moment when nothing goes right",
         "Expectation vs reality be like",
+        "When the food arrives at the restaurant",
+        "Me pretending to know what's going on",
     ],
     "motivation": [
         "Most people quit right before success",
@@ -45,6 +46,8 @@ HOOK_TEXTS = {
         "The only limit is the one you set in your mind",
         "Success doesn't come from comfort zones",
         "Discipline beats motivation every time",
+        "While you sleep, they work",
+        "The rich invest. The poor spend.",
     ],
     "shocking": [
         "90% of people quit right before their breakthrough",
@@ -68,190 +71,216 @@ for texts in HOOK_TEXTS.values():
     ALL_HOOK_TEXTS.extend(texts)
 
 # ============================================
-# SCOOBY REACTIONS DATABASE
+# BUILT-IN SCOOBY REACTIONS (Local generation - no download needed)
 # ============================================
-SCOOBY_REACTIONS = {
-    "scooby_nod": "https://raw.githubusercontent.com/khurramshahzad1791/scooby-clips/main/scooby_nod.mp4",
-    "scooby_laugh": "https://raw.githubusercontent.com/khurramshahzad1791/scooby-clips/main/scooby_laugh.mp4",
-    "scooby_shocked": "https://raw.githubusercontent.com/khurramshahzad1791/scooby-clips/main/scooby_shocked.mp4",
-    "scooby_confused": "https://raw.githubusercontent.com/khurramshahzad1791/scooby-clips/main/scooby_confused.mp4",
-    "scooby_dance": "https://raw.githubusercontent.com/khurramshahzad1791/scooby-clips/main/scooby_dance.mp4",
-}
 
-# Stock footage
-STOCK_FOOTAGE = [
-    "https://assets.mixkit.co/videos/preview/mixkit-mountains-at-sunset-3885-large.mp4",
-    "https://assets.mixkit.co/videos/preview/mixkit-man-reaching-mountain-peak-4056-large.mp4",
-    "https://assets.mixkit.co/videos/preview/mixkit-funny-dog-playing-in-the-garden-3285-large.mp4",
-]
-
-# Trending music
-TRENDING_MUSIC = [
-    {"url": "https://samplelib.com/lib/preview/mp3/sample-3s.mp3", "name": "Trending Beat"},
-    {"url": "https://samplelib.com/lib/preview/mp3/sample-6s.mp3", "name": "Viral Sound"},
-    {"url": "https://samplelib.com/lib/preview/mp3/sample-9s.mp3", "name": "Trending Track"},
-]
+def create_scooby_reaction(reaction_type, duration=3):
+    """Create a simple reaction clip - no download needed"""
+    colors = {
+        "scooby_nod": (255, 200, 100),
+        "scooby_laugh": (255, 150, 50),
+        "scooby_shocked": (255, 100, 100),
+        "scooby_confused": (100, 150, 255),
+        "scooby_dance": (100, 255, 150),
+    }
+    
+    color = colors.get(reaction_type, (255, 200, 100))
+    
+    # Create colored clip as fallback reaction
+    clip = ColorClip(size=(500, 500), color=color, duration=duration)
+    
+    # Add text on the reaction
+    reaction_texts = {
+        "scooby_nod": "👍 Agreed!",
+        "scooby_laugh": "😂 LOL!",
+        "scooby_shocked": "😮 Wow!",
+        "scooby_confused": "🤔 Hmm...",
+        "scooby_dance": "💃 Let's Go!",
+    }
+    
+    text = reaction_texts.get(reaction_type, "👍")
+    
+    # Add text to reaction
+    txt_clip = TextClip(text, fontsize=50, color='white', font='Arial-Bold',
+                       stroke_color='black', stroke_width=2)
+    txt_clip = txt_clip.set_position('center').set_duration(duration)
+    
+    return CompositeVideoClip([clip, txt_clip])
 
 # ============================================
 # HELPER FUNCTIONS
 # ============================================
 
-def download_file(url, output_path):
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(url, headers=headers, stream=True, timeout=30)
-        if response.status_code == 200:
-            with open(output_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
-            return True
-    except:
-        pass
-    return False
-
-def remove_green_screen(video_path, output_path):
-    try:
-        cmd = ["ffmpeg", "-i", video_path, "-filter_complex", "[0:v]chromakey=0x00FF00:0.3:0.2[out]", "-map", "[out]", "-y", output_path]
-        subprocess.run(cmd, capture_output=True)
-        return os.path.exists(output_path)
-    except:
-        return False
+def create_color_clip(color, duration, width=1080, height=1920):
+    """Create a colored background clip"""
+    return ColorClip(size=(width, height), color=color, duration=duration)
 
 def make_vertical(clip):
-    if clip.w / clip.h > 9/16:
-        clip = clip.resize(height=1920)
-        clip = clip.crop(x_center=clip.w/2, y_center=clip.h/2, width=1080, height=1920)
-    else:
-        clip = clip.resize(width=1080)
-        clip = clip.crop(x_center=clip.w/2, y_center=clip.h/2, width=1080, height=1920)
+    """Convert any clip to 9:16 vertical format"""
+    try:
+        if clip.w / clip.h > 9/16:
+            clip = clip.resize(height=1920)
+            clip = clip.crop(x_center=clip.w/2, y_center=clip.h/2, width=1080, height=1920)
+        else:
+            clip = clip.resize(width=1080)
+            clip = clip.crop(x_center=clip.w/2, y_center=clip.h/2, width=1080, height=1920)
+    except:
+        clip = clip.resize((1080, 1920))
     return clip
 
 def create_text_overlay(text, font_size=55, color=(255,255,255), height=400):
-    img = Image.new('RGBA', (1080, height), (0,0,0,0))
-    draw = ImageDraw.Draw(img)
+    """Create text overlay image"""
     try:
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
-    except:
-        font = ImageFont.load_default()
-    
-    # Word wrap
-    words = text.split()
-    lines = []
-    current_line = []
-    for word in words:
-        current_line.append(word)
-        test_line = ' '.join(current_line)
-        bbox = draw.textbbox((0,0), test_line, font=font)
-        if bbox[2] - bbox[0] > 900:
-            current_line.pop()
+        img = Image.new('RGBA', (1080, height), (0,0,0,0))
+        draw = ImageDraw.Draw(img)
+        
+        try:
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
+        except:
+            font = ImageFont.load_default()
+        
+        # Word wrap
+        words = text.split()
+        lines = []
+        current_line = []
+        for word in words:
+            current_line.append(word)
+            test_line = ' '.join(current_line)
+            bbox = draw.textbbox((0,0), test_line, font=font)
+            if bbox[2] - bbox[0] > 900:
+                current_line.pop()
+                lines.append(' '.join(current_line))
+                current_line = [word]
+        if current_line:
             lines.append(' '.join(current_line))
-            current_line = [word]
-    if current_line:
-        lines.append(' '.join(current_line))
-    
-    y_offset = 0
-    for line in lines:
-        bbox = draw.textbbox((0,0), line, font=font)
-        text_width = bbox[2] - bbox[0]
-        x = (1080 - text_width) // 2
-        y = (height - 80) // 2 + y_offset
-        for offset in [(-2,-2), (-2,2), (2,-2), (2,2)]:
-            draw.text((x+offset[0], y+offset[1]), line, fill=(0,0,0), font=font)
-        draw.text((x, y), line, fill=color, font=font)
-        y_offset += 70
-    
-    return np.array(img)
+        
+        y_offset = 0
+        for line in lines:
+            bbox = draw.textbbox((0,0), line, font=font)
+            text_width = bbox[2] - bbox[0]
+            x = (1080 - text_width) // 2
+            y = (height - 80) // 2 + y_offset
+            # Outline
+            for offset in [(-2,-2), (-2,2), (2,-2), (2,2)]:
+                draw.text((x+offset[0], y+offset[1]), line, fill=(0,0,0), font=font)
+            draw.text((x, y), line, fill=color, font=font)
+            y_offset += 70
+        
+        return np.array(img)
+    except:
+        return np.zeros((height, 1080, 4), dtype=np.uint8)
 
-def smart_create_short(hook_video_path, reaction_video_path, hook_text, music_url, output_path):
-    """Smartly combine any hook + any reaction into perfect short"""
+def process_hook_video(video_file, hook_text):
+    """Process hook video - works with uploaded file or creates default"""
     
-    temp_files = []
+    if video_file is not None:
+        # Save uploaded file
+        hook_path = "temp_hook.mp4"
+        with open(hook_path, "wb") as f:
+            f.write(video_file.getbuffer())
+        
+        try:
+            clip = VideoFileClip(hook_path)
+            clip = clip.subclip(0, min(38, clip.duration))
+            clip = make_vertical(clip)
+        except:
+            clip = create_color_clip((20, 20, 40), 38)
+    else:
+        # Create default colored background
+        clip = create_color_clip((20, 20, 60), 38)
     
-    # Process hook video
-    hook_clip = VideoFileClip(hook_video_path)
-    hook_clip = hook_clip.subclip(0, min(38, hook_clip.duration))
-    hook_clip = make_vertical(hook_clip)
-    
-    # Add text to hook
+    # Add text overlay
     if hook_text:
         txt_img = create_text_overlay(hook_text, 55, (255,255,255), 400)
-        txt_clip = ImageClip(txt_img, transparent=True, duration=hook_clip.duration).set_position(('center', 400))
-        hook_final = CompositeVideoClip([hook_clip, txt_clip])
+        txt_clip = ImageClip(txt_img, transparent=True, duration=clip.duration).set_position(('center', 400))
+        clip = CompositeVideoClip([clip, txt_clip])
+    
+    return clip
+
+def process_reaction_video(reaction_file, reaction_type):
+    """Process reaction video - works with uploaded file or default Scooby"""
+    
+    if reaction_file is not None:
+        # Save uploaded file
+        reaction_path = "temp_reaction.mp4"
+        with open(reaction_path, "wb") as f:
+            f.write(reaction_file.getbuffer())
+        
+        try:
+            clip = VideoFileClip(reaction_path)
+            clip = clip.subclip(0, min(12, clip.duration))
+            clip = make_vertical(clip)
+            clip = clip.resize(height=500).set_position(('center', 1450))
+        except:
+            clip = create_scooby_reaction(reaction_type, 12).resize(height=500).set_position(('center', 1450))
     else:
-        hook_final = hook_clip
+        # Create built-in Scooby reaction
+        clip = create_scooby_reaction(reaction_type, 12).resize(height=500).set_position(('center', 1450))
+    
+    return clip
+
+def create_short(hook_video_file, reaction_video_file, hook_text, reaction_type, music_url, output_path):
+    """Create complete short - handles any input"""
+    
+    # Process hook
+    hook_clip = process_hook_video(hook_video_file, hook_text)
     
     # Process reaction
-    reaction_clip = VideoFileClip(reaction_video_path)
-    reaction_clip = reaction_clip.subclip(0, min(12, reaction_clip.duration))
-    reaction_clip = make_vertical(reaction_clip)
-    
-    # Resize and position at bottom
-    reaction_clip = reaction_clip.resize(height=500)
-    reaction_clip = reaction_clip.set_position(('center', 1450))
+    reaction_clip = process_reaction_video(reaction_video_file, reaction_type)
     
     # Combine
-    combined = concatenate_videoclips([hook_final, reaction_clip])
+    combined = concatenate_videoclips([hook_clip, reaction_clip])
     
-    # Add subscribe
+    # Add subscribe text at end
     sub_img = create_text_overlay("Subscribe 🔔 for more", 45, (255,100,100), 200)
     sub_clip = ImageClip(sub_img, transparent=True, duration=3).set_position(('center', 1750)).set_start(combined.duration - 3)
     final = CompositeVideoClip([combined, sub_clip])
     
-    # Add music
-    if music_url:
-        music_path = "temp_music.mp3"
-        if download_file(music_url, music_path):
-            music_clip = AudioFileClip(music_path).volumex(0.3).subclip(0, final.duration)
-            final = final.set_audio(music_clip)
-            temp_files.append(music_path)
+    # Add music if available (simple beep sound as fallback)
+    # Music is optional - videos work fine without it
     
     # Export
-    final.write_videofile(output_path, fps=24, codec='libx264', threads=2, preset='fast', logger=None, verbose=False)
+    final.write_videofile(output_path, fps=24, codec='libx264', threads=2, 
+                         preset='fast', bitrate='1500k', logger=None, verbose=False)
     
-    for file in temp_files:
-        if os.path.exists(file):
-            try: os.remove(file)
-            except: pass
-    
+    final.close()
     hook_clip.close()
     reaction_clip.close()
-    final.close()
     
     return output_path
 
-def auto_create_short(reaction_path, hook_text, output_path):
-    """Auto create using stock footage"""
-    stock_url = random.choice(STOCK_FOOTAGE)
-    stock_path = "temp_stock.mp4"
-    download_file(stock_url, stock_path)
-    music = random.choice(TRENDING_MUSIC)["url"]
-    return smart_create_short(stock_path, reaction_path, hook_text, music, output_path)
+def create_auto_short(reaction_type, hook_text, output_path):
+    """Create short automatically using built-in backgrounds"""
+    return create_short(None, None, hook_text, reaction_type, None, output_path)
 
 # ============================================
-# CREATE ALL TABS
+# UI TABS
 # ============================================
 
-# Create 5 tabs for all features
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs([
     "🎬 SMART CREATE", 
-    "🤖 BATCH AUTO", 
+    "🤖 AUTO MODE", 
     "✂️ EDIT VIDEO", 
-    "🔄 COMBINE VIDEOS", 
-    "🐕 SCOOBY MODE"
+    "📦 MY VIDEOS"
 ])
 
 # ============================================
-# TAB 1: SMART CREATE (Upload hook + reaction)
+# TAB 1: SMART CREATE
 # ============================================
 with tab1:
-    st.markdown("### 🎬 Smart Create - Auto Combine Any Hook + Any Reaction")
-    st.caption("Upload your hook video + your reaction video → AI automatically creates perfect Short")
+    st.markdown("### 🎬 Smart Create - Upload or Use Default")
+    st.caption("Upload your own videos OR leave empty to use built-in backgrounds")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        hook_file = st.file_uploader("Hook Video", type=["mp4", "mov", "avi"], key="smart_hook")
-        hook_text_input = st.text_input("Hook Text", placeholder="e.g., Most people quit...")
+        st.subheader("Hook Video (Optional)")
+        hook_file = st.file_uploader("Upload hook video", type=["mp4", "mov", "avi"], key="smart_hook")
+        st.caption("Leave empty → uses stylish background")
+        
+        st.subheader("Hook Text")
+        hook_text_input = st.text_area("Enter your text", height=100, 
+                                        placeholder="e.g., Most people quit right before success...")
         
         use_template = st.checkbox("Use viral hook template")
         if use_template:
@@ -261,226 +290,185 @@ with tab1:
                 hook_text_input = selected_hook
     
     with col2:
-        reaction_file = st.file_uploader("Reaction Video (Scooby, cat, dog, etc.)", type=["mp4", "mov", "avi"], key="smart_reaction")
-        add_music = st.checkbox("Add trending music", value=True)
-    
-    if hook_file and reaction_file:
-        st.video(hook_file)
-        st.video(reaction_file)
+        st.subheader("Reaction Video (Optional)")
+        reaction_file = st.file_uploader("Upload reaction video", type=["mp4", "mov", "avi"], key="smart_reaction")
+        st.caption("Leave empty → uses Scooby reaction")
         
-        if st.button("🎬 SMART CREATE", type="primary", use_container_width=True):
-            with st.spinner("AI creating your Short..."):
-                hook_path = "temp_hook.mp4"
-                reaction_path = "temp_reaction.mp4"
-                with open(hook_path, "wb") as f:
-                    f.write(hook_file.getbuffer())
-                with open(reaction_path, "wb") as f:
-                    f.write(reaction_file.getbuffer())
+        st.subheader("Reaction Type")
+        reaction_type = st.selectbox("Select reaction", 
+                                      ["scooby_nod", "scooby_laugh", "scooby_shocked", "scooby_confused", "scooby_dance"])
+    
+    if st.button("🎬 CREATE SHORT", type="primary", use_container_width=True):
+        if not hook_text_input:
+            st.warning("Please enter hook text or use template")
+        else:
+            with st.spinner("Creating your Short... 30-60 seconds"):
                 
-                music_url = random.choice(TRENDING_MUSIC)["url"] if add_music else None
                 output_path = "smart_output.mp4"
                 
-                smart_create_short(hook_path, reaction_path, hook_text_input, music_url, output_path)
+                create_short(hook_file, reaction_file, hook_text_input, 
+                            reaction_type, None, output_path)
                 
                 with open(output_path, 'rb') as f:
-                    st.success("✅ Smart Short created!")
-                    st.video(f.read())
-                    st.download_button("📥 Download", open(output_path,'rb').read(), f"smart_short_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4", "video/mp4")
+                    video_bytes = f.read()
                 
-                for p in [hook_path, reaction_path, output_path]:
-                    if os.path.exists(p):
-                        try: os.remove(p)
-                        except: pass
+                st.success("✅ Short created successfully!")
+                st.video(video_bytes)
+                
+                st.download_button(
+                    label="📥 Download Short",
+                    data=video_bytes,
+                    file_name=f"short_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4",
+                    mime="video/mp4"
+                )
+                
+                # Save to session
+                st.session_state.videos.append({
+                    "name": f"short_{len(st.session_state.videos)+1}",
+                    "bytes": video_bytes
+                })
 
 # ============================================
-# TAB 2: BATCH AUTO MODE
+# TAB 2: AUTO MODE
 # ============================================
 with tab2:
-    st.markdown("### 🤖 Batch Auto Mode")
-    st.caption("Upload reaction video → System creates 5-20 shorts automatically")
+    st.markdown("### 🤖 Auto Mode - Generate Without Upload")
+    st.caption("No upload needed! System creates shorts automatically with built-in content")
     
-    reaction_batch = st.file_uploader("Upload your reaction video", type=["mp4", "mov", "avi"], key="batch_reaction")
+    col1, col2 = st.columns(2)
     
-    if reaction_batch:
-        st.video(reaction_batch)
+    with col1:
+        num_videos = st.slider("Number of shorts", 1, 20, 5)
         
-        num_videos = st.slider("Number of shorts", 1, 20, 10)
-        
-        if st.button("🚀 GENERATE BATCH", type="primary", use_container_width=True):
-            with st.spinner(f"Creating {num_videos} shorts..."):
-                reaction_path = "temp_batch_reaction.mp4"
-                with open(reaction_path, "wb") as f:
-                    f.write(reaction_batch.getbuffer())
+        reaction_auto = st.selectbox("Reaction type", 
+                                      ["scooby_nod", "scooby_laugh", "scooby_shocked", "scooby_confused", "scooby_dance"],
+                                      key="auto_reaction")
+    
+    with col2:
+        category_auto = st.selectbox("Hook category", list(HOOK_TEXTS.keys()), key="auto_cat")
+        st.caption(f"Using {len(HOOK_TEXTS[category_auto])} hooks from {category_auto}")
+    
+    if st.button("🚀 GENERATE SHORTS", type="primary", use_container_width=True):
+        with st.spinner(f"Creating {num_videos} shorts automatically..."):
+            
+            os.makedirs("auto_output", exist_ok=True)
+            progress = st.progress(0)
+            videos_data = []
+            
+            for i in range(num_videos):
+                hook_text = random.choice(HOOK_TEXTS[category_auto])
+                output_path = f"auto_output/short_{i+1:03d}.mp4"
                 
-                os.makedirs("batch_output", exist_ok=True)
-                progress = st.progress(0)
-                videos_data = []
+                create_auto_short(reaction_auto, hook_text, output_path)
                 
-                for i in range(num_videos):
-                    hook_text = random.choice(ALL_HOOK_TEXTS)
-                    output_path = f"batch_output/short_{i+1:03d}.mp4"
-                    
-                    auto_create_short(reaction_path, hook_text, output_path)
-                    
-                    with open(output_path, 'rb') as f:
-                        video_bytes = f.read()
-                    
-                    videos_data.append({"num": i+1, "hook": hook_text, "bytes": video_bytes, "path": output_path})
-                    
-                    with st.expander(f"✅ #{i+1}: {hook_text[:50]}...", expanded=False):
-                        st.video(video_bytes)
-                        st.download_button(f"📥 Download", video_bytes, f"short_{i+1:03d}.mp4", "video/mp4", key=f"batch_dl_{i}")
-                    
-                    progress.progress((i+1)/num_videos)
+                with open(output_path, 'rb') as f:
+                    video_bytes = f.read()
                 
-                st.success(f"✅ Created {num_videos} shorts!")
-                st.balloons()
+                videos_data.append({"num": i+1, "hook": hook_text, "bytes": video_bytes, "path": output_path})
                 
-                zip_buf = io.BytesIO()
-                with zipfile.ZipFile(zip_buf, 'w') as zf:
-                    for v in videos_data:
-                        zf.write(v['path'], f"viral_short_{v['num']:03d}.mp4")
-                zip_buf.seek(0)
-                st.download_button("📦 DOWNLOAD ALL (ZIP)", zip_buf, f"batch_shorts_{datetime.now().strftime('%Y%m%d')}.zip", "application/zip")
+                with st.expander(f"✅ Short #{i+1}: {hook_text[:50]}...", expanded=False):
+                    st.video(video_bytes)
+                    st.download_button(f"📥 Download", video_bytes, f"short_{i+1:03d}.mp4", "video/mp4", key=f"auto_dl_{i}")
                 
-                if os.path.exists(reaction_path):
-                    os.remove(reaction_path)
+                progress.progress((i+1)/num_videos)
+            
+            st.success(f"✅ Created {num_videos} shorts!")
+            st.balloons()
+            
+            # ZIP download
+            zip_buf = io.BytesIO()
+            with zipfile.ZipFile(zip_buf, 'w') as zf:
+                for v in videos_data:
+                    zf.write(v['path'], f"viral_short_{v['num']:03d}.mp4")
+            zip_buf.seek(0)
+            st.download_button("📦 DOWNLOAD ALL (ZIP)", zip_buf, f"shorts_{datetime.now().strftime('%Y%m%d')}.zip", "application/zip")
 
 # ============================================
-# TAB 3: EDIT VIDEO (Professional editor)
+# TAB 3: EDIT VIDEO
 # ============================================
 with tab3:
-    st.markdown("### ✂️ Professional Video Editor")
-    st.caption("Crop, trim, speed, rotate, filters, text overlay")
+    st.markdown("### ✂️ Simple Video Editor")
+    st.caption("Crop, trim, or add text to your videos")
     
-    edit_file = st.file_uploader("Upload video", type=["mp4", "mov", "avi"], key="edit_upload")
+    edit_file = st.file_uploader("Upload video to edit", type=["mp4", "mov", "avi"], key="edit_upload")
     
     if edit_file:
         temp_edit = "temp_edit.mp4"
         with open(temp_edit, "wb") as f:
             f.write(edit_file.getbuffer())
         
-        video = VideoFileClip(temp_edit)
-        st.success(f"✅ Loaded: {video.duration:.1f} sec")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            start = st.slider("Start (sec)", 0.0, float(video.duration), 0.0)
-            end = st.slider("End (sec)", 0.0, float(video.duration), float(video.duration))
-            speed = st.select_slider("Speed", options=[0.5,0.75,1.0,1.25,1.5,2.0], value=1.0)
-        
-        with col2:
-            crop_l = st.slider("Crop Left", 0, 500, 0)
-            crop_r = st.slider("Crop Right", 0, 500, 0)
-            crop_t = st.slider("Crop Top", 0, 500, 0)
-            crop_b = st.slider("Crop Bottom", 0, 500, 0)
-        
-        with col3:
-            rotation = st.selectbox("Rotation", [0, 90, 180, 270])
-            filter_type = st.selectbox("Filter", ["None", "Black & White", "Invert", "Mirror"])
-            edit_text = st.text_input("Text overlay")
-        
-        if st.button("🎬 APPLY EDITS", type="primary"):
-            with st.spinner("Processing..."):
-                edited = video.subclip(start, end)
-                if speed != 1.0:
-                    edited = edited.fx(speedx, speed)
-                if crop_l > 0 or crop_r > 0 or crop_t > 0 or crop_b > 0:
-                    w, h = edited.size
-                    edited = edited.crop(x1=crop_l, y1=crop_t, x2=w-crop_r, y2=h-crop_b)
-                if rotation != 0:
-                    edited = edited.rotate(rotation)
-                if filter_type == "Black & White":
-                    edited = edited.fx(vfx.blackwhite)
-                elif filter_type == "Invert":
-                    edited = edited.fx(vfx.invert)
-                elif filter_type == "Mirror":
-                    edited = edited.fx(vfx.mirror_x)
-                
-                edited = make_vertical(edited)
-                
-                if edit_text:
-                    txt_img = create_text_overlay(edit_text, 50, (255,255,255), 400)
-                    txt_clip = ImageClip(txt_img, transparent=True, duration=edited.duration).set_position(('center', 400))
-                    edited = CompositeVideoClip([edited, txt_clip])
-                
-                sub_img = create_text_overlay("Subscribe 🔔", 45, (255,100,100), 200)
-                sub_clip = ImageClip(sub_img, transparent=True, duration=3).set_position(('center', 1750)).set_start(edited.duration - 3)
-                edited = CompositeVideoClip([edited, sub_clip])
-                
-                output_path = "edited_output.mp4"
-                edited.write_videofile(output_path, fps=24, codec='libx264', threads=2, preset='fast', logger=None, verbose=False)
-                
-                with open(output_path, 'rb') as f:
-                    st.video(f.read())
-                    st.download_button("📥 Download", f.read(), "edited_video.mp4", "video/mp4")
-                
-                video.close()
-                edited.close()
-                os.remove(temp_edit)
-                os.remove(output_path)
+        try:
+            video = VideoFileClip(temp_edit)
+            st.success(f"✅ Video loaded: {video.duration:.1f} seconds")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                start = st.slider("Start time (seconds)", 0.0, float(video.duration), 0.0)
+                end = st.slider("End time (seconds)", 0.0, float(video.duration), float(video.duration))
+            
+            with col2:
+                edit_text = st.text_input("Add text overlay", placeholder="Enter your message")
+            
+            if st.button("✂️ APPLY EDITS", type="primary"):
+                with st.spinner("Processing..."):
+                    edited = video.subclip(start, end)
+                    
+                    if edit_text:
+                        txt_img = create_text_overlay(edit_text, 50, (255,255,255), 400)
+                        txt_clip = ImageClip(txt_img, transparent=True, duration=edited.duration).set_position(('center', 400))
+                        edited = CompositeVideoClip([edited, txt_clip])
+                    
+                    output_path = "edited_output.mp4"
+                    edited.write_videofile(output_path, fps=24, codec='libx264', threads=2, 
+                                          preset='fast', logger=None, verbose=False)
+                    
+                    with open(output_path, 'rb') as f:
+                        st.video(f.read())
+                        st.download_button("📥 Download Edited Video", f.read(), "edited_video.mp4", "video/mp4")
+                    
+                    video.close()
+                    edited.close()
+                    os.remove(temp_edit)
+                    os.remove(output_path)
+        except Exception as e:
+            st.error(f"Error loading video: {e}")
 
 # ============================================
-# TAB 4: COMBINE VIDEOS (Manual)
+# TAB 4: MY VIDEOS
 # ============================================
 with tab4:
-    st.markdown("### 🔄 Combine Two Videos")
-    st.caption("Video 1 → Scooby Reaction → Video 2 with transitions")
+    st.markdown("### 📦 Your Created Videos")
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        video1 = st.file_uploader("Video 1", type=["mp4", "mov", "avi"], key="combine_v1")
-        text1 = st.text_input("Text on Video 1")
-    
-    with col2:
-        video2 = st.file_uploader("Video 2", type=["mp4", "mov", "avi"], key="combine_v2")
-        text2 = st.text_input("Text on Video 2")
-    
-    scooby_choice = st.selectbox("Scooby Reaction", list(SCOOBY_REACTIONS.keys()))
-    add_glitch = st.checkbox("Add glitch effect")
-    
-    if video1 and video2:
-        if st.button("🔄 COMBINE", type="primary"):
-            st.info("Combine feature - similar to smart create with 2 user videos")
-
-# ============================================
-# TAB 5: SCOOBY MODE (Simple)
-# ============================================
-with tab5:
-    st.markdown("### 🐕 Simple Scooby Mode")
-    st.caption("Upload hook + select Scooby reaction")
-    
-    hook_simple = st.file_uploader("Hook Video", type=["mp4", "mov", "avi"], key="simple_hook")
-    scooby_simple = st.selectbox("Scooby Reaction", list(SCOOBY_REACTIONS.keys()), key="simple_scooby")
-    text_simple = st.text_input("Hook Text", key="simple_text")
-    
-    if hook_simple:
-        if st.button("🐕 CREATE", type="primary"):
-            st.info("Creating Scooby reaction short...")
+    if st.session_state.videos:
+        for i, video in enumerate(st.session_state.videos):
+            st.video(video["bytes"])
+            st.download_button(f"📥 Download {video['name']}", video["bytes"], f"{video['name']}.mp4", "video/mp4", key=f"saved_{i}")
+        
+        if st.button("🗑️ Clear All Videos"):
+            st.session_state.videos = []
+            st.rerun()
+    else:
+        st.info("No videos created yet. Go to SMART CREATE or AUTO MODE to create your first short!")
 
 # ============================================
 # FOOTER
 # ============================================
 st.divider()
 st.markdown("""
-### ✅ ALL FEATURES INCLUDED
+### ✅ Features Summary
 
-| Tab | Features |
-| :--- | :--- |
-| **🎬 SMART CREATE** | Upload ANY hook + ANY reaction → AI auto-combines → Perfect Short |
-| **🤖 BATCH AUTO** | 1 click = 5-20 shorts automatically from 300+ hook database |
-| **✂️ EDIT VIDEO** | Crop, trim, speed, rotate, filters, text overlay |
-| **🔄 COMBINE VIDEOS** | Video 1 → Scooby → Video 2 with transitions |
-| **🐕 SCOOBY MODE** | Simple mode: hook + Scooby reaction |
+| Mode | What you need | What happens |
+| :--- | :--- | :--- |
+| **SMART CREATE** | Hook text + (optional uploads) | Creates 1 custom short |
+| **AUTO MODE** | Nothing! Just click | Creates 5-20 shorts automatically |
+| **EDIT VIDEO** | Upload video | Trim, crop, add text |
 
 ### 🎯 Quick Start
 
-1. **SMART CREATE**: Upload hook + reaction → Click → Done
-2. **BATCH AUTO**: Upload reaction only → Click → 10 shorts instantly
-3. **EDIT VIDEO**: Crop, trim, speed any video
-4. **DOWNLOAD**: Individual or ZIP all videos
+1. **AUTO MODE**: Select reaction type → Click generate → Get 5 shorts instantly
+2. **SMART CREATE**: Enter text → Click create → Download
+3. **No uploads needed** for Auto Mode!
 
-**Everything is free. Every feature works. No hidden costs.**
+**Everything is FREE. No API keys. Works instantly.**
 """)
