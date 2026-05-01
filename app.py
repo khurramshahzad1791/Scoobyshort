@@ -5,7 +5,6 @@ import zipfile
 import io
 from datetime import datetime
 from moviepy.editor import *
-from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 
 # Page config
@@ -16,29 +15,44 @@ st.set_page_config(
 )
 
 st.title("🎬 Short Creator")
-st.caption("Simple, Working, No Errors")
+st.caption("Simple - Fast - Works Every Time")
 
 # Session state
 if 'videos' not in st.session_state:
     st.session_state.videos = []
 
 # ============================================
-# HOOK TEXTS
+# HOOK TEXTS DATABASE
 # ============================================
 HOOK_TEXTS = {
     "funny": [
         "POV: You're trying to act professional at work",
         "When you realize it's Monday tomorrow",
         "Me trying to wake up for a 9 AM class",
+        "That moment when nothing goes right",
+        "Expectation vs reality be like",
     ],
     "motivation": [
         "Most people quit right before success",
         "You are closer than you think",
+        "The only limit is the one you set in your mind",
+        "Success doesn't come from comfort zones",
         "Discipline beats motivation every time",
     ],
     "shocking": [
-        "90% of people quit right before success",
+        "90% of people quit right before their breakthrough",
+        "The average person will spend 6 years on social media",
         "Everything you want is on the other side of fear",
+    ],
+    "life": [
+        "Stop caring about what others think",
+        "Invest in yourself first",
+        "Your 20s are for building, not settling",
+    ],
+    "money": [
+        "Stop trading time for money",
+        "Broke people save. Rich people invest.",
+        "Your degree won't make you rich",
     ],
 }
 
@@ -47,178 +61,248 @@ for texts in HOOK_TEXTS.values():
     ALL_HOOK_TEXTS.extend(texts)
 
 # ============================================
-# SIMPLE TEXT FUNCTION - No complex compositing
-# ============================================
-
-def create_text_clip(text, duration, fontsize=50, color='white'):
-    """Create a simple text clip - works every time"""
-    try:
-        # Simple text clip (works without ImageMagick)
-        txt = TextClip(text, fontsize=fontsize, color=color, font='Arial')
-        txt = txt.set_duration(duration)
-        txt = txt.set_position('center')
-        return txt
-    except:
-        # Fallback: create colored background with text as image
-        from PIL import Image, ImageDraw, ImageFont
-        
-        img = Image.new('RGB', (1000, 200), color='black')
-        draw = ImageDraw.Draw(img)
-        try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", fontsize)
-        except:
-            font = ImageFont.load_default()
-        
-        draw.text((50, 80), text, fill='white', font=font)
-        
-        # Convert PIL image to numpy array
-        img_array = np.array(img)
-        
-        # Create clip from image
-        clip = ImageClip(img_array, duration=duration)
-        clip = clip.set_position('center')
-        return clip
-
-# ============================================
-# SIMPLE VIDEO CREATION
+# SIMPLE VIDEO CREATION - NO ERRORS
 # ============================================
 
 def create_simple_short(hook_text, reaction_type, output_path):
-    """Create short with separate clips - simple and working"""
+    """
+    Creates a simple short with:
+    - 8 seconds: Black screen with white text (hook)
+    - 4 seconds: Colored screen with reaction text
+    - Subscribe text at the end
+    """
     
-    # Hook part (black background with white text)
-    hook_clip = ColorClip(size=(1080, 1920), color=(0, 0, 0), duration=8)
-    hook_text_clip = create_text_clip(hook_text, 8, 55, 'white')
-    hook_final = CompositeVideoClip([hook_clip, hook_text_clip])
+    # Hook part (8 seconds)
+    hook_bg = ColorClip(size=(1080, 1920), color=(0, 0, 0), duration=8)
+    hook_txt = TextClip(hook_text, fontsize=55, color='white', font='Arial', size=(900, None), method='caption')
+    hook_txt = hook_txt.set_duration(8).set_position('center')
+    hook_clip = CompositeVideoClip([hook_bg, hook_txt])
     
-    # Reaction part (colored background with reaction text)
+    # Reaction colors
     reaction_colors = {
-        "nod": (100, 200, 100),
-        "laugh": (255, 200, 100),
-        "shocked": (255, 100, 100),
-        "confused": (100, 150, 255),
+        "nod": (76, 175, 80),      # Green
+        "laugh": (255, 193, 7),    # Yellow/Orange
+        "shocked": (244, 67, 54),  # Red
+        "confused": (33, 150, 243), # Blue
+        "dance": (156, 39, 176),   # Purple
     }
     
-    color_key = reaction_type.replace("scooby_", "")
-    color = reaction_colors.get(color_key, (100, 200, 100))
-    
-    reaction_clip = ColorClip(size=(1080, 1920), color=color, duration=4)
-    
+    # Reaction texts
     reaction_texts = {
         "nod": "👍 AGREE!",
-        "laugh": "😂 HILARIOUS!",
+        "laugh": "😂 FUNNY!",
         "shocked": "😮 NO WAY!",
         "confused": "🤔 HMM...",
+        "dance": "💃 LET'S GO!",
     }
     
-    reaction_text = reaction_texts.get(color_key, "👍")
-    reaction_text_clip = create_text_clip(reaction_text, 4, 60, 'white')
-    reaction_final = CompositeVideoClip([reaction_clip, reaction_text_clip])
+    # Get reaction type (remove 'scooby_' prefix if present)
+    reaction_key = reaction_type.replace("scooby_", "")
+    if reaction_key not in reaction_colors:
+        reaction_key = "nod"
     
-    # Combine
-    final = concatenate_videoclips([hook_final, reaction_final])
+    color = reaction_colors.get(reaction_key, (76, 175, 80))
+    react_text = reaction_texts.get(reaction_key, "👍")
     
-    # Add subscribe text at end
-    sub_clip = create_text_clip("Subscribe 🔔", 3, 45, '#ff6666')
-    sub_clip = sub_clip.set_position(('center', 1700))
-    sub_clip = sub_clip.set_start(final.duration - 3)
-    final = CompositeVideoClip([final, sub_clip])
+    # Reaction part (4 seconds)
+    react_bg = ColorClip(size=(1080, 1920), color=color, duration=4)
+    react_txt = TextClip(react_text, fontsize=70, color='white', font='Arial', size=(900, None), method='caption')
+    react_txt = react_txt.set_duration(4).set_position('center')
+    react_clip = CompositeVideoClip([react_bg, react_txt])
+    
+    # Combine hook + reaction
+    final = concatenate_videoclips([hook_clip, react_clip])
+    
+    # Add subscribe text at the end (last 3 seconds)
+    sub_txt = TextClip("Subscribe 🔔", fontsize=50, color='#ff6666', font='Arial', size=(900, None), method='caption')
+    sub_txt = sub_txt.set_duration(3).set_position(('center', 1700))
+    sub_txt = sub_txt.set_start(final.duration - 3)
+    final = CompositeVideoClip([final, sub_txt])
     
     # Export
-    final.write_videofile(output_path, fps=24, codec='libx264', threads=2, 
-                         preset='fast', logger=None, verbose=False)
+    final.write_videofile(
+        output_path,
+        fps=24,
+        codec='libx264',
+        audio_codec='aac',
+        threads=2,
+        preset='fast',
+        logger=None,
+        verbose=False
+    )
     
     final.close()
     return output_path
 
 # ============================================
-# UI
+# UI TABS
 # ============================================
 
-st.markdown("---")
+tab1, tab2 = st.tabs(["🎬 CREATE ONE", "🤖 AUTO GENERATE"])
 
-col1, col2 = st.columns(2)
-
-with col1:
-    st.subheader("🎬 Create One Short")
+# ============================================
+# TAB 1: CREATE ONE SHORT
+# ============================================
+with tab1:
+    st.markdown("### Create a Short")
+    st.caption("Type your text, choose a reaction, and click Create")
     
-    hook_input = st.text_area("Your text", height=100, 
-                               placeholder="Type your message here...")
+    col1, col2 = st.columns(2)
     
-    reaction = st.selectbox("Reaction", ["nod", "laugh", "shocked", "confused"])
+    with col1:
+        user_text = st.text_area(
+            "Your Text", 
+            height=120,
+            placeholder="Example: Most people quit right before success..."
+        )
+        
+        use_template = st.checkbox("Use template instead")
+        if use_template:
+            category = st.selectbox("Category", list(HOOK_TEXTS.keys()))
+            selected = st.selectbox("Select", HOOK_TEXTS[category])
+            if selected:
+                user_text = selected
     
-    if st.button("CREATE SHORT", type="primary", use_container_width=True):
-        if not hook_input:
+    with col2:
+        reaction_choice = st.selectbox(
+            "Reaction", 
+            ["nod", "laugh", "shocked", "confused", "dance"],
+            format_func=lambda x: {
+                "nod": "👍 Nod (Green)",
+                "laugh": "😂 Laugh (Yellow)",
+                "shocked": "😮 Shocked (Red)",
+                "confused": "🤔 Confused (Blue)",
+                "dance": "💃 Dance (Purple)"
+            }.get(x, x)
+        )
+        
+        st.info(f"Selected: {reaction_choice}")
+    
+    if st.button("🎬 CREATE SHORT", type="primary", use_container_width=True):
+        if not user_text:
             st.warning("Please enter some text")
         else:
-            with st.spinner("Creating..."):
-                reaction_name = f"scooby_{reaction}"
-                output_path = f"short_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4"
+            with st.spinner("Creating your short... 10-15 seconds"):
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                output_path = f"short_{timestamp}.mp4"
                 
-                create_simple_short(hook_input, reaction_name, output_path)
+                create_simple_short(user_text, reaction_choice, output_path)
                 
                 with open(output_path, 'rb') as f:
                     video_bytes = f.read()
                 
-                st.success("✅ Short created!")
+                st.success("✅ Short created successfully!")
                 st.video(video_bytes)
                 
-                st.download_button("📥 Download", video_bytes, "short.mp4", "video/mp4")
+                st.download_button(
+                    "📥 Download Short",
+                    video_bytes,
+                    f"short_{timestamp}.mp4",
+                    "video/mp4"
+                )
                 
-                st.session_state.videos.append({"name": "short", "bytes": video_bytes})
+                st.session_state.videos.append({
+                    "name": f"short_{len(st.session_state.videos)+1}",
+                    "bytes": video_bytes
+                })
+                
                 os.remove(output_path)
 
-with col2:
-    st.subheader("🤖 Auto Generate")
+# ============================================
+# TAB 2: AUTO GENERATE SHORTS
+# ============================================
+with tab2:
+    st.markdown("### Auto Generate Shorts")
+    st.caption("Select how many shorts you want - system creates them automatically")
     
-    num_videos = st.slider("Number of shorts", 1, 10, 3)
-    auto_reaction = st.selectbox("Reaction", ["nod", "laugh", "shocked", "confused"], key="auto_react")
+    col1, col2 = st.columns(2)
     
-    if st.button("GENERATE SHORTS", type="primary", use_container_width=True):
-        with st.spinner(f"Creating {num_videos} shorts..."):
-            os.makedirs("output", exist_ok=True)
-            videos_data = []
+    with col1:
+        num_shorts = st.slider("Number of Shorts", 1, 20, 5)
+    
+    with col2:
+        auto_reaction = st.selectbox(
+            "Reaction for all", 
+            ["nod", "laugh", "shocked", "confused", "dance"],
+            index=0,
+            key="auto_reaction"
+        )
+    
+    if st.button("🚀 GENERATE SHORTS", type="primary", use_container_width=True):
+        with st.spinner(f"Creating {num_shorts} shorts..."):
+            os.makedirs("auto_output", exist_ok=True)
+            progress_bar = st.progress(0)
+            shorts_data = []
             
-            for i in range(num_videos):
+            for i in range(num_shorts):
                 hook = random.choice(ALL_HOOK_TEXTS)
-                output_path = f"output/short_{i+1:03d}.mp4"
+                output_path = f"auto_output/short_{i+1:03d}.mp4"
                 
-                reaction_name = f"scooby_{auto_reaction}"
-                create_simple_short(hook, reaction_name, output_path)
+                create_simple_short(hook, auto_reaction, output_path)
                 
                 with open(output_path, 'rb') as f:
                     video_bytes = f.read()
                 
-                videos_data.append({"num": i+1, "text": hook[:50], "bytes": video_bytes, "path": output_path})
+                shorts_data.append({
+                    "num": i+1,
+                    "text": hook,
+                    "bytes": video_bytes,
+                    "path": output_path
+                })
                 
-                with st.expander(f"Short #{i+1}: {hook[:60]}...", expanded=False):
+                # Show each short as it completes
+                with st.expander(f"✅ Short #{i+1}: {hook[:60]}...", expanded=False):
                     st.video(video_bytes)
-                    st.download_button(f"📥 Download", video_bytes, f"short_{i+1:03d}.mp4", "video/mp4", key=f"dl_{i}")
+                    st.download_button(
+                        f"📥 Download", 
+                        video_bytes, 
+                        f"short_{i+1:03d}.mp4", 
+                        "video/mp4",
+                        key=f"auto_dl_{i}"
+                    )
+                
+                progress_bar.progress((i + 1) / num_shorts)
             
-            st.success(f"✅ Created {num_videos} shorts!")
+            st.success(f"✅ Created {num_shorts} shorts!")
             st.balloons()
             
-            # ZIP
-            zip_buf = io.BytesIO()
-            with zipfile.ZipFile(zip_buf, 'w') as zf:
-                for v in videos_data:
-                    zf.write(v['path'], f"short_{v['num']:03d}.mp4")
-            zip_buf.seek(0)
-            st.download_button("📦 DOWNLOAD ALL (ZIP)", zip_buf, f"shorts_{datetime.now().strftime('%Y%m%d')}.zip", "application/zip")
+            # Create ZIP file
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                for short in shorts_data:
+                    zip_file.write(short['path'], f"short_{short['num']:03d}.mp4")
+            
+            zip_buffer.seek(0)
+            st.download_button(
+                "📦 DOWNLOAD ALL SHORTS (ZIP)",
+                zip_buffer,
+                f"shorts_{datetime.now().strftime('%Y%m%d')}.zip",
+                "application/zip"
+            )
 
 # ============================================
-# MY VIDEOS
+# MY VIDEOS SECTION
 # ============================================
 if st.session_state.videos:
     st.divider()
-    st.subheader("📦 Your Videos")
+    st.subheader("📦 Your Created Videos")
     
     for i, video in enumerate(st.session_state.videos):
         col1, col2 = st.columns([3, 1])
         with col1:
             st.video(video["bytes"])
         with col2:
-            st.download_button(f"📥", video["bytes"], f"video_{i}.mp4", "video/mp4", key=f"saved_{i}")
+            st.download_button(
+                "📥 Download", 
+                video["bytes"], 
+                f"{video['name']}.mp4", 
+                "video/mp4", 
+                key=f"my_vid_{i}"
+            )
+    
+    if st.button("🗑️ Clear All Videos"):
+        st.session_state.videos = []
+        st.rerun()
 
 # ============================================
 # FOOTER
@@ -227,10 +311,20 @@ st.divider()
 st.markdown("""
 ### ✅ How to Use
 
-| Mode | What to do |
+| Mode | Steps |
 | :--- | :--- |
-| **Create One** | Type text → Select reaction → Click Create |
-| **Auto Generate** | Select number → Click Generate → Download ZIP |
+| **CREATE ONE** | Type text → Choose reaction → Click Create → Download |
+| **AUTO GENERATE** | Choose number → Click Generate → Download ZIP |
 
-**Works instantly. No errors. Simple and reliable.**
+### 🎨 Reactions
+
+| Reaction | Color | Text |
+| :--- | :--- | :--- |
+| Nod | 🟢 Green | 👍 AGREE! |
+| Laugh | 🟡 Yellow | 😂 FUNNY! |
+| Shocked | 🔴 Red | 😮 NO WAY! |
+| Confused | 🔵 Blue | 🤔 HMM... |
+| Dance | 🟣 Purple | 💃 LET'S GO! |
+
+**No API keys needed. No complex setup. Works instantly.**
 """)
